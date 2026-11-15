@@ -1,6 +1,8 @@
 import { Controller, Get, Inject, ServiceUnavailableException } from '@nestjs/common';
+import { ApiExcludeController } from '@nestjs/swagger';
 import { DatabaseService } from '../persistence/database.service';
 
+@ApiExcludeController()
 @Controller('health')
 export class HealthController {
   constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}

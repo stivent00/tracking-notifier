@@ -301,3 +301,26 @@ describe('API: registrar evento e historial', () => {
     });
   });
 });
+
+describe('API: especificacion OpenAPI', () => {
+  it('publica /openapi.json con las rutas del servicio', async () => {
+    const t = await startTestApp();
+    try {
+      const res = await t.api.get('/openapi.json');
+
+      expect(res.status).toBe(200);
+      expect(Object.keys(res.body.paths)).toEqual(
+        expect.arrayContaining([
+          '/guias/{numeroGuia}/eventos',
+          '/guias/{numeroGuia}',
+          '/webhook',
+          '/notificaciones',
+        ]),
+      );
+      expect(res.body.paths['/guias/{numeroGuia}/eventos'].post.responses).toHaveProperty('409');
+      expect((await t.api.get('/docs')).status).toBe(200);
+    } finally {
+      await t.close();
+    }
+  });
+});
