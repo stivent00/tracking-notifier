@@ -21,13 +21,23 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      webhook-receiver:
+        condition: service_started
     environment:
       NODE_ENV: production
       PORT: 3000
       LOG_LEVEL: ${LOG_LEVEL:-info}
       DATABASE_URL: postgres://${POSTGRES_USER:-tracking}:${POSTGRES_PASSWORD:-tracking-local-dev}@db:5432/${POSTGRES_DB:-tracking}
+      # The demo receiver speaks plain http inside the compose network.
+      WEBHOOK_ALLOW_HTTP: 'true'
+      WEBHOOK_BACKOFF_BASE_MS: ${WEBHOOK_BACKOFF_BASE_MS:-1000}
     ports:
       - '${API_PORT:-8088}:3000'
+
+  webhook-receiver:
+    build: ./webhook-receiver
+    ports:
+      - '${RECEIVER_PORT:-9099}:9000'
 
 volumes:
   db-data:

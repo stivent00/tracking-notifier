@@ -19,5 +19,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node", "jest"]
   },
-  "include": ["src/**/*", "test/**/*", "webhook-receiver/**/*.ts"]
+  "include": ["src/**/*", "test/**/*"]
 }
