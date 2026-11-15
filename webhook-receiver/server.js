@@ -38,7 +38,7 @@ const server = http.createServer((req, res) => {
   const chunks = [];
   req.on('data', (chunk) => chunks.push(chunk));
   req.on('end', () => {
-    let body = null;
+    let body;
     try {
       body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     } catch {

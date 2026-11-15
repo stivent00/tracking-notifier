@@ -15,10 +15,11 @@ function headerValue(req: IncomingMessage, name: string): string | undefined {
  * operational metadata (ids, route, status, latency) is emitted so that
  * personal data never reaches the logs.
  */
-export function buildLoggerParams(config: AppConfig): Params {
+export function buildLoggerParams(config: AppConfig, stream?: NodeJS.WritableStream): Params {
   return {
     pinoHttp: {
       level: config.logLevel,
+      ...(stream ? { stream } : {}),
       base: { service: 'tracking-notifier' },
       formatters: { level: (label) => ({ level: label }) },
       timestamp: () => `,"time":"${new Date().toISOString()}"`,

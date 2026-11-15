@@ -4,10 +4,16 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import type { AppConfig } from './infrastructure/config/config';
 
-export async function createApp(config: AppConfig): Promise<NestExpressApplication> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule.register(config), {
-    bufferLogs: true,
-  });
+export async function createApp(
+  config: AppConfig,
+  logStream?: NodeJS.WritableStream,
+): Promise<NestExpressApplication> {
+  const app = await NestFactory.create<NestExpressApplication>(
+    AppModule.register(config, logStream),
+    {
+      bufferLogs: true,
+    },
+  );
   app.useLogger(app.get(Logger));
   app.disable('x-powered-by');
   app.useBodyParser('json', { limit: '100kb' });

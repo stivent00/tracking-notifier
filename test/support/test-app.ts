@@ -51,10 +51,11 @@ export function testConfig(databaseUrl: string, overrides: ConfigOverrides = {})
 export async function startTestApp(
   overrides: ConfigOverrides = {},
   existingDb?: TestDatabase,
+  logStream?: NodeJS.WritableStream,
 ): Promise<TestApp> {
   const db: TestDatabase = existingDb ?? (await createTestDatabase());
   const config = testConfig(db.url, overrides);
-  const app = await createApp(config);
+  const app = await createApp(config, logStream);
   await app.init();
   const database = app.get(DatabaseService);
 

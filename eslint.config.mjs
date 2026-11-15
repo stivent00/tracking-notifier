@@ -62,7 +62,12 @@ export default tseslint.config(
     ]),
   },
   {
-    files: ['**/*.js', '**/*.mjs'],
+    files: ['**/*.mjs'],
     languageOptions: { sourceType: 'module' },
+  },
+  {
+    files: ['**/*.js'],
+    languageOptions: { sourceType: 'commonjs' },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
 );

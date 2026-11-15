@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      # Integration tests start PostgreSQL with Testcontainers (Docker is preinstalled).
+      - run: npm test
+
+  compose:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start the stack
+        run: docker compose up -d --build --wait
+      - name: Smoke test
+        run: |
+          curl --fail --silent http://localhost:8088/health
+          curl --fail --silent -X PUT http://localhost:8088/webhook \
+            -H 'X-Tenant-Id: ci' -H 'Content-Type: application/json' \
+            -d '{"url":"http://webhook-receiver:9000/hook"}'
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs
+      - run: docker compose down -v
+        if: always()

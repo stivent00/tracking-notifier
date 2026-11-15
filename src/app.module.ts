@@ -148,10 +148,10 @@ function buildProviders(config: AppConfig): Provider[] {
 
 @Module({})
 export class AppModule {
-  static register(config: AppConfig): DynamicModule {
+  static register(config: AppConfig, logStream?: NodeJS.WritableStream): DynamicModule {
     return {
       module: AppModule,
-      imports: [LoggerModule.forRoot(buildLoggerParams(config))],
+      imports: [LoggerModule.forRoot(buildLoggerParams(config, logStream))],
       controllers: [HealthController, GuiasController, WebhookController, NotificacionesController],
       providers: buildProviders(config),
     };
