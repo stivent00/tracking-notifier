@@ -38,8 +38,24 @@ export class InMemoryEventos implements Pick<EventoRepository, 'buscarPorEventId
 
 export class InMemoryWebhooks implements WebhookConfigRepository {
   private readonly items = new Map<string, ConfigWebhook>();
-  async guardar(config: ConfigWebhook): Promise<void> {
-    this.items.set(config.tenantId, config);
+  async guardar(candidato: ConfigWebhook): Promise<ConfigWebhook> {
+    const final = {
+      ...candidato,
+      secreto: this.items.get(candidato.tenantId)?.secreto ?? candidato.secreto,
+    };
+    this.items.set(candidato.tenantId, final);
+    return final;
+  }
+  async rotarSecreto(
+    tenantId: string,
+    secreto: string,
+    ahora: Date,
+  ): Promise<ConfigWebhook | null> {
+    const actual = this.items.get(tenantId);
+    if (!actual) return null;
+    const nuevo = { ...actual, secreto, actualizadoEn: ahora };
+    this.items.set(tenantId, nuevo);
+    return nuevo;
   }
   async buscar(tenantId: string): Promise<ConfigWebhook | null> {
     return this.items.get(tenantId) ?? null;

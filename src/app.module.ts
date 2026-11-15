@@ -1,7 +1,11 @@
 import { DynamicModule, Module, type Provider } from '@nestjs/common';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { LoggerModule, PinoLogger } from 'nestjs-pino';
-import { ConfigurarWebhook, ObtenerWebhook } from './application/use-cases/configurar-webhook';
+import {
+  ConfigurarWebhook,
+  ObtenerWebhook,
+  RotarSecretoWebhook,
+} from './application/use-cases/configurar-webhook';
 import { ConsultarHistorial } from './application/use-cases/consultar-historial';
 import { ConsultarNotificaciones } from './application/use-cases/consultar-notificaciones';
 import { DespacharNotificaciones } from './application/use-cases/despachar-notificaciones';
@@ -25,7 +29,7 @@ import { NotificacionWorker } from './infrastructure/worker/notificacion.worker'
 import { PoliticaReintentos } from './domain/politica-reintentos';
 import type { AppLogger } from './application/ports/app-logger';
 import type { WebhookSender } from './application/ports/webhook-sender';
-import { systemClock, uuidGenerator } from './infrastructure/system';
+import { secretGenerator, systemClock, uuidGenerator } from './infrastructure/system';
 import { TOKENS } from './infrastructure/tokens';
 import type { Clock } from './application/ports/clock';
 import type { IdGenerator } from './application/ports/id-generator';
@@ -34,6 +38,7 @@ import type {
   NotificacionRepository,
   WebhookConfigRepository,
 } from './application/ports/repositorios';
+import type { SecretGenerator } from './application/ports/secret-generator';
 import type { UnitOfWork } from './application/ports/unit-of-work';
 
 /**
@@ -46,6 +51,7 @@ function buildProviders(config: AppConfig): Provider[] {
     DatabaseService,
     { provide: TOKENS.Clock, useValue: systemClock },
     { provide: TOKENS.IdGenerator, useValue: uuidGenerator },
+    { provide: TOKENS.SecretGenerator, useValue: secretGenerator },
     {
       provide: TOKENS.UnitOfWork,
       inject: [DatabaseService],
@@ -80,9 +86,17 @@ function buildProviders(config: AppConfig): Provider[] {
     },
     {
       provide: TOKENS.ConfigurarWebhook,
-      inject: [TOKENS.WebhookConfigRepository, TOKENS.Clock],
-      useFactory: (webhooks: WebhookConfigRepository, clock: Clock) =>
-        new ConfigurarWebhook(webhooks, clock, { permitirHttp: config.webhook.allowHttp }),
+      inject: [TOKENS.WebhookConfigRepository, TOKENS.Clock, TOKENS.SecretGenerator],
+      useFactory: (webhooks: WebhookConfigRepository, clock: Clock, secretos: SecretGenerator) =>
+        new ConfigurarWebhook(webhooks, clock, secretos, {
+          permitirHttp: config.webhook.allowHttp,
+        }),
+    },
+    {
+      provide: TOKENS.RotarSecretoWebhook,
+      inject: [TOKENS.WebhookConfigRepository, TOKENS.Clock, TOKENS.SecretGenerator],
+      useFactory: (webhooks: WebhookConfigRepository, clock: Clock, secretos: SecretGenerator) =>
+        new RotarSecretoWebhook(webhooks, clock, secretos),
     },
     {
       provide: TOKENS.ObtenerWebhook,

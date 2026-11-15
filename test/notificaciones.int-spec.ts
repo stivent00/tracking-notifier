@@ -1,6 +1,6 @@
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { startTestApp, TENANT_HEADER, type TestApp } from './support/test-app';
-import { WebhookTarget, waitFor } from './support/webhook-target';
+import { WebhookTarget, waitFor, type RecordedRequest } from './support/webhook-target';
 
 const A = 'tenant-a';
 const B = 'tenant-b';
@@ -165,6 +165,82 @@ describe('API: webhook, notificaciones y reintentos', () => {
       } finally {
         await otroTarget.stop();
       }
+    });
+  });
+
+  describe('firma HMAC', () => {
+    const firmaValida = (peticion: RecordedRequest, secreto: string): boolean => {
+      const timestamp = String(peticion.headers['x-signature-timestamp']);
+      const esperado = `sha256=${createHmac('sha256', secreto)
+        .update(`${timestamp}.${peticion.rawBody}`)
+        .digest('hex')}`;
+      return peticion.headers['x-signature'] === esperado;
+    };
+
+    it('muestra el secreto solo en la primera configuracion y nunca en la consulta', async () => {
+      const primera = await configurarWebhook('tenant-firma-1', target.url());
+      const segunda = await configurarWebhook('tenant-firma-1', target.url('/otra'));
+      const consulta = await t.api.get('/webhook').set(TENANT_HEADER, 'tenant-firma-1');
+
+      expect(primera.body.secreto).toMatch(/^whsec_[A-Za-z0-9_-]{43}$/);
+      expect(segunda.status).toBe(200);
+      expect(segunda.body).not.toHaveProperty('secreto');
+      expect(consulta.body).not.toHaveProperty('secreto');
+    });
+
+    it('con configuraciones simultaneas solo una recibe el secreto y es el que queda guardado', async () => {
+      const tenant = 'tenant-firma-carrera';
+
+      const respuestas = await Promise.all(
+        Array.from({ length: 10 }, () => configurarWebhook(tenant, target.url())),
+      );
+
+      const reveladas = respuestas.map((r) => r.body.secreto).filter(Boolean);
+      expect(reveladas).toHaveLength(1);
+      const { secreto } = await t.queryOne<{ secreto: string }>(
+        'SELECT secreto FROM webhooks_tenant WHERE tenant_id = $1',
+        [tenant],
+      );
+      expect(secreto).toBe(reveladas[0]);
+    });
+
+    it('cada notificacion llega firmada con el secreto del tenant', async () => {
+      const tenant = 'tenant-firma-2';
+      const { body } = await configurarWebhook(tenant, target.url());
+      const e = evento('CREADA');
+
+      await registrar(tenant, guiaNueva(), e);
+      await esperarEstado(tenant, e.eventId, 'ENVIADA');
+
+      const [recibida] = target.requests;
+      expect(recibida?.headers['x-signature']).toMatch(/^sha256=[0-9a-f]{64}$/);
+      expect(firmaValida(recibida!, body.secreto)).toBe(true);
+      expect(firmaValida(recibida!, 'otro-secreto')).toBe(false);
+      const edad = Date.now() / 1000 - Number(recibida?.headers['x-signature-timestamp']);
+      expect(Math.abs(edad)).toBeLessThan(30);
+    });
+
+    it('al rotar el secreto, las entregas nuevas usan el nuevo y el anterior deja de validar', async () => {
+      const tenant = 'tenant-firma-3';
+      const { body: inicial } = await configurarWebhook(tenant, target.url());
+      const rotado = await t.api.post('/webhook/secreto/rotar').set(TENANT_HEADER, tenant);
+      const e = evento('CREADA');
+
+      await registrar(tenant, guiaNueva(), e);
+      await esperarEstado(tenant, e.eventId, 'ENVIADA');
+
+      expect(rotado.status).toBe(200);
+      expect(rotado.body.secreto).not.toBe(inicial.secreto);
+      const [recibida] = target.requests;
+      expect(firmaValida(recibida!, rotado.body.secreto)).toBe(true);
+      expect(firmaValida(recibida!, inicial.secreto)).toBe(false);
+    });
+
+    it('rotar el secreto sin webhook configurado es 404', async () => {
+      const r = await t.api.post('/webhook/secreto/rotar').set(TENANT_HEADER, 'tenant-sin-hook');
+
+      expect(r.status).toBe(404);
+      expect(r.body.code).toBe('WEBHOOK_NO_CONFIGURADO');
     });
   });
 

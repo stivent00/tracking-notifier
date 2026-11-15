@@ -12,6 +12,8 @@ export const TOKENS = {
   RegistrarEvento: Symbol('RegistrarEvento'),
   ConsultarHistorial: Symbol('ConsultarHistorial'),
   ConfigurarWebhook: Symbol('ConfigurarWebhook'),
+  RotarSecretoWebhook: Symbol('RotarSecretoWebhook'),
+  SecretGenerator: Symbol('SecretGenerator'),
   ObtenerWebhook: Symbol('ObtenerWebhook'),
   ConsultarNotificaciones: Symbol('ConsultarNotificaciones'),
 } as const;

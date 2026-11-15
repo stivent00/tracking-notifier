@@ -43,6 +43,7 @@ function escenario(
     void webhooks.guardar({
       tenantId: TENANT,
       url: 'https://cliente.example.com/hook',
+      secreto: 'whsec_de_prueba',
       actualizadoEn: INICIO,
     });
   }
@@ -77,6 +78,7 @@ describe('DespacharNotificaciones', () => {
     expect(sender.solicitudes).toHaveLength(1);
     expect(sender.solicitudes[0]).toMatchObject({
       url: 'https://cliente.example.com/hook',
+      secreto: 'whsec_de_prueba',
       intento: 1,
       payload: {
         eventId: EVENT_ID,

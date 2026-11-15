@@ -38,6 +38,7 @@ export interface NotificacionRow {
 export interface WebhookRow {
   tenantId: string;
   url: string;
+  secreto: string;
   actualizadoEn: Date;
 }
 
@@ -100,6 +101,7 @@ export const WebhookSchema = new EntitySchema<WebhookRow>({
   columns: {
     tenantId: { name: 'tenant_id', type: 'varchar', length: 64, primary: true },
     url: { name: 'url', type: 'text' },
+    secreto: { name: 'secreto', type: 'text' },
     actualizadoEn: timestamptz('actualizado_en'),
   },
 });

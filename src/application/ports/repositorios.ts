@@ -53,6 +53,12 @@ export interface NotificacionRepository {
 }
 
 export interface WebhookConfigRepository {
-  guardar(config: ConfigWebhook): Promise<void>;
+  /**
+   * Inserta la configuracion o, si el tenant ya tenia una, actualiza solo la URL y
+   * conserva su secreto. Devuelve el estado final persistido.
+   */
+  guardar(candidato: ConfigWebhook): Promise<ConfigWebhook>;
+  /** Reemplaza el secreto; devuelve null si el tenant no tiene webhook configurado. */
+  rotarSecreto(tenantId: string, secreto: string, ahora: Date): Promise<ConfigWebhook | null>;
   buscar(tenantId: string): Promise<ConfigWebhook | null>;
 }

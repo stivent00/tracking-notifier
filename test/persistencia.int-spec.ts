@@ -45,6 +45,30 @@ describe('persistencia contra PostgreSQL real', () => {
     await expect(dataSource.runMigrations()).resolves.toEqual([]);
   });
 
+  it('la migracion del secreto rellena las filas existentes y se puede revertir', async () => {
+    const otra = await createTestDatabase();
+    const ds = createDataSource({ url: otra.url, poolSize: 2 });
+    try {
+      await ds.initialize();
+      await ds.runMigrations();
+      await ds.undoLastMigration();
+      await ds.query(
+        `INSERT INTO webhooks_tenant (tenant_id, url, actualizado_en)
+         VALUES ('antiguo', 'https://cliente.example.com/hook', now())`,
+      );
+
+      await ds.runMigrations();
+
+      const [fila] = await ds.query(
+        `SELECT secreto FROM webhooks_tenant WHERE tenant_id = 'antiguo'`,
+      );
+      expect(fila.secreto).toMatch(/^[0-9a-f]{64}$/);
+    } finally {
+      await ds.destroy();
+      await otra.drop();
+    }
+  });
+
   it('revierte toda la transaccion si el trabajo lanza', async () => {
     const e = evento({ numeroGuia: 'G-ROLLBACK' });
 

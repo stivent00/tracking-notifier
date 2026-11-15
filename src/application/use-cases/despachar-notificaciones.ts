@@ -97,6 +97,7 @@ export class DespacharNotificaciones {
     }
     return this.sender.enviar({
       url: config.url,
+      secreto: config.secreto,
       notificacionId: notificacion.id,
       intento,
       payload: {

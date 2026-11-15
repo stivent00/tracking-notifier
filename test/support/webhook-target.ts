@@ -6,6 +6,7 @@ export interface RecordedRequest {
   path: string;
   headers: IncomingHttpHeaders;
   body: Record<string, unknown>;
+  rawBody: string;
 }
 
 /** What the fake customer endpoint does with the Nth request (0-based). */
@@ -27,11 +28,13 @@ export class WebhookTarget {
       req.on('data', (chunk: Buffer) => chunks.push(chunk));
       req.on('end', async () => {
         const index = this.requests.length;
+        const rawBody = Buffer.concat(chunks).toString('utf8');
         this.requests.push({
           method: req.method ?? '',
           path: req.url ?? '',
           headers: req.headers,
-          body: JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'),
+          body: JSON.parse(rawBody || '{}'),
+          rawBody,
         });
         const outcome = this.behavior(index);
         if (outcome === 'hang') return;

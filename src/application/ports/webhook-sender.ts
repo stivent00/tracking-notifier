@@ -9,6 +9,8 @@ export interface PayloadWebhook {
 
 export interface SolicitudWebhook {
   url: string;
+  /** Secreto del tenant con el que se firma el cuerpo. */
+  secreto: string;
   payload: PayloadWebhook;
   notificacionId: string;
   /** Numero del intento que se esta realizando (1 para el primero). */

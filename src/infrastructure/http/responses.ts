@@ -41,6 +41,17 @@ export class WebhookResponse {
   @ApiProperty() actualizadoEn!: string;
 }
 
+export class ConfiguracionWebhookResponse extends WebhookResponse {
+  @ApiPropertyOptional({
+    description: 'Solo en la primera configuracion del tenant; guardelo, no se vuelve a mostrar',
+  })
+  secreto?: string;
+}
+
+export class SecretoResponse {
+  @ApiProperty({ example: 'whsec_...' }) secreto!: string;
+}
+
 export class NotificacionResponse {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) eventId!: string;
