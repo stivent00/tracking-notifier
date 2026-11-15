@@ -27,7 +27,8 @@ migraciones se aplican solas al arrancar. Los puertos se cambian con `API_PORT` 
 ```bash
 T='-H X-Tenant-Id:acme -H Content-Type:application/json'
 
-# 1. Configurar el webhook del tenant (el receptor de prueba corre dentro de la red de compose)
+# 1. Configurar el webhook del tenant (el receptor de prueba corre dentro de la red de compose).
+#    La primera vez la respuesta incluye `secreto`, la clave de firma HMAC: no se vuelve a mostrar.
 curl -s -X PUT localhost:8088/webhook $T -d '{"url":"http://webhook-receiver:9000/hook"}'
 
 # 2. Registrar eventos de la guia GUIA-1001
@@ -90,8 +91,10 @@ Todas las rutas (salvo `/health`) exigen la cabecera `X-Tenant-Id` (1 a 64 carac
 | `GET /guias/{numeroGuia}`          | Estado actual y eventos en orden cronologico                                                                                                                                                   | 200, 404                                                                                                                                    |
 | `PUT /webhook`                     | Guarda la URL de notificacion del tenant (`{"url": "..."}`)                                                                                                                                    | 200, 400                                                                                                                                    |
 | `GET /webhook`                     | Consulta la URL configurada                                                                                                                                                                    | 200, 404                                                                                                                                    |
+| `POST /webhook/secreto/rotar`      | Rota el secreto de firma y devuelve el nuevo (unica vez que se muestra)                                                                                                                        | 200, 404                                                                                                                                    |
 | `GET /notificaciones`              | Notificaciones del tenant. Filtros: `estado` (`PENDIENTE`, `ENVIADA`, `FALLIDA`), `numeroGuia`, `limite` (1-100, def. 20), `desplazamiento`                                                    | 200, 400                                                                                                                                    |
 | `GET /health`                      | Liveness + conexion a la base de datos                                                                                                                                                         | 200, 503                                                                                                                                    |
+| `GET /docs` y `GET /openapi.json`  | Swagger UI y especificacion OpenAPI 3                                                                                                                                                          | 200                                                                                                                                         |
 
 **Formato de error unico** (RFC 7807, `application/problem+json`), generado por un solo filtro:
 
@@ -112,7 +115,25 @@ Los errores de validacion agregan `errors: [{ "field": "...", "message": "..." }
 
 **Webhook que recibe el cliente:** `POST` con `Content-Type: application/json`, cuerpo
 `{ eventId, tenantId, numeroGuia, estado, fechaEvento, observacion }` y las cabeceras
-`X-Event-Id`, `X-Notification-Id` y `X-Delivery-Attempt` (1 a 5). Cualquier 2xx es exito.
+`X-Event-Id`, `X-Notification-Id`, `X-Delivery-Attempt` (1 a 5), `X-Signature-Timestamp` y
+`X-Signature`. Cualquier 2xx es exito.
+
+**Verificar la firma (HMAC-SHA256):** `X-Signature` es `sha256=` + el HMAC hexadecimal de
+`"{X-Signature-Timestamp}.{cuerpo exacto recibido}"` con el secreto del tenant. El cliente debe
+comparar en tiempo constante y rechazar timestamps antiguos para evitar replays:
+
+```js
+const { createHmac, timingSafeEqual } = require('node:crypto');
+
+function esValida(secreto, cabeceras, cuerpoCrudo) {
+  const ts = cabeceras['x-signature-timestamp'];
+  if (Math.abs(Date.now() / 1000 - Number(ts)) > 300) return false;
+  const firma = createHmac('sha256', secreto).update(`${ts}.${cuerpoCrudo}`).digest('hex');
+  const esperado = Buffer.from(`sha256=${firma}`);
+  const recibido = Buffer.from(cabeceras['x-signature'] ?? '');
+  return recibido.length === esperado.length && timingSafeEqual(recibido, esperado);
+}
+```
 
 ## Arquitectura
 
@@ -195,7 +216,11 @@ El enunciado deja varios puntos abiertos; estas son las decisiones tomadas:
     con `WEBHOOK_ALLOW_HTTP=true` (activado en `docker-compose.yml` para la demo local).
 13. **`fechaEvento`:** ISO 8601 con zona horaria explicita y fecha de calendario real
     (`2026-02-30` se rechaza). Se almacena como `timestamptz` con precision de milisegundos.
-14. **Credenciales en compose:** los valores por defecto (`tracking-local-dev`) son solo para
+14. **Secretos de firma:** el servicio genera un secreto por tenant (`whsec_...`, 256 bits) en la
+    primera configuracion del webhook y lo muestra una sola vez; reconfigurar la URL lo conserva
+    y `POST /webhook/secreto/rotar` lo reemplaza. Se guarda en texto plano en la base de datos
+    porque el servicio necesita la clave para firmar (ver "con mas tiempo": cifrado en reposo).
+15. **Credenciales en compose:** los valores por defecto (`tracking-local-dev`) son solo para
     desarrollo local, se pueden sobreescribir con variables de entorno y no hay ningun secreto real
     en el repositorio. `.env` esta ignorado por git; `.env.example` documenta las variables.
 
@@ -244,7 +269,18 @@ El enunciado deja varios puntos abiertos; estas son las decisiones tomadas:
   simultaneas dejan un solo ganador; rollback completo; reclamos concurrentes que nunca devuelven la
   misma fila; arrendamiento vencido; aislamiento entre tenants; formato de error; flujo completo del
   worker contra un servidor HTTP falso (exito, 5xx, 5 fallos, timeout, registro que no espera al
-  webhook, entrega tras reiniciar el servicio).
+  webhook, entrega tras reiniciar el servicio), firma HMAC verificable con el secreto del tenant
+  (incluida la rotacion y la carrera de dos primeras configuraciones), migraciones con datos
+  existentes y logs sin datos personales.
+
+## Opcionales
+
+| Opcional               | Estado                                                                                          |
+| ---------------------- | ----------------------------------------------------------------------------------------------- |
+| Firma HMAC del cuerpo  | Hecho: `X-Signature` con secreto por tenant y rotacion                                          |
+| Especificacion OpenAPI | Hecho: `/docs` y `/openapi.json` (`@nestjs/swagger`)                                            |
+| Pipeline de CI         | Hecho: `.github/workflows/ci.yml` (lint, formato, tipos, pruebas y humo de `docker compose up`) |
+| Metricas o trazas      | No implementado; el worker y el filtro de errores ya centralizan los puntos donde instrumentar  |
 
 ## Con mas tiempo
 
@@ -257,7 +293,9 @@ El enunciado deja varios puntos abiertos; estas son las decisiones tomadas:
 - Politica de retencion/archivado de `eventos_guia` y `notificaciones`; particionado por fecha.
 - Rate limiting por tenant y circuit breaker por webhook para no martillar clientes caidos.
 - Metricas de la cola (pendientes, antiguedad, fallidas) y trazas distribuidas.
-- Rotacion de secretos de firma y autenticacion mutua con el gateway.
+- Cifrar en reposo los secretos de firma (KMS o cifrado de sobre) y soportar dos secretos activos
+  durante la rotacion; autenticacion mutua con el gateway.
+- Metricas y trazas con OpenTelemetry (no se implemento; ver "Opcionales").
 
 ## Uso de IA
 
