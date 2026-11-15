@@ -31,11 +31,4 @@ export class TypeOrmGuiaRepository implements GuiaRepository {
       },
     );
   }
-
-  async buscar(tenantId: string, numeroGuia: string): Promise<Guia | null> {
-    const row = await this.manager
-      .getRepository<GuiaRow>(GuiaSchema)
-      .findOne({ where: { tenantId, numeroGuia } });
-    return row && row.estadoActual !== null ? guiaDesdeRow(row) : null;
-  }
 }

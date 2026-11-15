@@ -56,3 +56,11 @@ export class UrlWebhookInvalidaError extends ErrorDeDominio {
     super(motivo);
   }
 }
+
+export class WebhookNoConfiguradoError extends ErrorDeDominio {
+  readonly codigo = 'WEBHOOK_NO_CONFIGURADO';
+
+  constructor() {
+    super('El tenant no tiene un webhook configurado');
+  }
+}

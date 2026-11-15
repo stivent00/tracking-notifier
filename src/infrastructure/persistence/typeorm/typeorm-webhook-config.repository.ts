@@ -9,10 +9,9 @@ export class TypeOrmWebhookConfigRepository implements WebhookConfigRepository {
   async guardar(config: ConfigWebhook): Promise<void> {
     await this.manager
       .getRepository<WebhookRow>(WebhookSchema)
-      .upsert(
-        { tenantId: config.tenantId, url: config.url, actualizadoEn: config.actualizadoEn },
-        ['tenantId'],
-      );
+      .upsert({ tenantId: config.tenantId, url: config.url, actualizadoEn: config.actualizadoEn }, [
+        'tenantId',
+      ]);
   }
 
   async buscar(tenantId: string): Promise<ConfigWebhook | null> {

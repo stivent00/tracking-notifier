@@ -14,7 +14,6 @@ export interface GuiaRepository {
    */
   obtenerParaActualizar(tenantId: string, numeroGuia: string): Promise<Guia>;
   guardar(guia: Guia): Promise<void>;
-  buscar(tenantId: string, numeroGuia: string): Promise<Guia | null>;
 }
 
 export interface EventoRepository {
