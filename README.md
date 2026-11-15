@@ -25,31 +25,33 @@ migraciones se aplican solas al arrancar. Los puertos se cambian con `API_PORT` 
 ### Probarlo con curl
 
 ```bash
-T='-H X-Tenant-Id:acme -H Content-Type:application/json'
+# Funcion auxiliar valida en bash y zsh (macOS). No uses una variable con las cabeceras sin
+# comillas: zsh no la separa en palabras y curl envia una cabecera mal formada (400 sin cuerpo).
+api() { curl -s "$@" -H 'X-Tenant-Id: acme' -H 'Content-Type: application/json'; }
 
 # 1. Configurar el webhook del tenant (el receptor de prueba corre dentro de la red de compose).
 #    La primera vez la respuesta incluye `secreto`, la clave de firma HMAC: no se vuelve a mostrar.
-curl -s -X PUT localhost:8088/webhook $T -d '{"url":"http://webhook-receiver:9000/hook"}'
+api -X PUT localhost:8088/webhook -d '{"url":"http://webhook-receiver:9000/hook"}'
 
 # 2. Registrar eventos de la guia GUIA-1001
-curl -s -X POST localhost:8088/guias/GUIA-1001/eventos $T -d '{
+api -X POST localhost:8088/guias/GUIA-1001/eventos -d '{
   "eventId":"3f1c9c1e-6a53-4a4c-9f58-0b1c2d3e4f50","estado":"CREADA",
   "fechaEvento":"2026-01-15T14:00:00Z","observacion":"Tarjeta de prueba"}'
-curl -s -X POST localhost:8088/guias/GUIA-1001/eventos $T -d '{
+api -X POST localhost:8088/guias/GUIA-1001/eventos -d '{
   "eventId":"8a2d4b6c-1e3f-4a5b-8c7d-9e0f1a2b3c4d","estado":"EN_RUTA",
   "fechaEvento":"2026-01-15T15:00:00Z"}'
 
 # 3. Repetir el mismo eventId: responde 200 con la cabecera Idempotent-Replayed y no duplica nada
-curl -si -X POST localhost:8088/guias/GUIA-1001/eventos $T -d '{
+api -i -X POST localhost:8088/guias/GUIA-1001/eventos -d '{
   "eventId":"3f1c9c1e-6a53-4a4c-9f58-0b1c2d3e4f50","estado":"CREADA",
   "fechaEvento":"2026-01-15T14:00:00Z","observacion":"Tarjeta de prueba"}'
 
 # 4. Historial y notificaciones
-curl -s localhost:8088/guias/GUIA-1001 -H X-Tenant-Id:acme
-curl -s "localhost:8088/notificaciones?estado=ENVIADA" -H X-Tenant-Id:acme
+api localhost:8088/guias/GUIA-1001
+api "localhost:8088/notificaciones?estado=ENVIADA"
 
 # 5. Otro tenant no ve la guia (404)
-curl -s localhost:8088/guias/GUIA-1001 -H X-Tenant-Id:otro-cliente
+curl -s localhost:8088/guias/GUIA-1001 -H 'X-Tenant-Id: otro-cliente'
 
 # 6. Mirar lo que recibio el cliente
 docker compose logs webhook-receiver
