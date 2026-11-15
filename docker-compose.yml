@@ -1,5 +1,5 @@
-# Local development defaults only. Override any value through the environment or a
 name: tracking-notifier
+# Local development defaults only. Override any value through the environment or a
 # local .env file (see .env.example); real deployments must inject their own secrets.
 services:
   db:
