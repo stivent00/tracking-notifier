@@ -9,6 +9,9 @@ export interface TestApp {
   app: NestExpressApplication;
   api: ReturnType<typeof request>;
   config: AppConfig;
+  db: TestDatabase;
+  /** Stops the app but keeps the database, to simulate a process restart. */
+  stop(): Promise<void>;
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
   queryOne<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T>;
   close(): Promise<void>;
@@ -45,8 +48,11 @@ export function testConfig(databaseUrl: string, overrides: ConfigOverrides = {})
   };
 }
 
-export async function startTestApp(overrides: ConfigOverrides = {}): Promise<TestApp> {
-  const db: TestDatabase = await createTestDatabase();
+export async function startTestApp(
+  overrides: ConfigOverrides = {},
+  existingDb?: TestDatabase,
+): Promise<TestApp> {
+  const db: TestDatabase = existingDb ?? (await createTestDatabase());
   const config = testConfig(db.url, overrides);
   const app = await createApp(config);
   await app.init();
@@ -56,6 +62,8 @@ export async function startTestApp(overrides: ConfigOverrides = {}): Promise<Tes
     app,
     api: request(app.getHttpServer()),
     config,
+    db,
+    stop: () => app.close(),
     query: (sql, params) => database.dataSource.query(sql, params),
     async queryOne(sql, params) {
       const rows = await database.dataSource.query(sql, params);

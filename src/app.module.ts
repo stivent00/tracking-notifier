@@ -1,9 +1,10 @@
 import { DynamicModule, Module, type Provider } from '@nestjs/common';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
-import { LoggerModule } from 'nestjs-pino';
+import { LoggerModule, PinoLogger } from 'nestjs-pino';
 import { ConfigurarWebhook, ObtenerWebhook } from './application/use-cases/configurar-webhook';
 import { ConsultarHistorial } from './application/use-cases/consultar-historial';
 import { ConsultarNotificaciones } from './application/use-cases/consultar-notificaciones';
+import { DespacharNotificaciones } from './application/use-cases/despachar-notificaciones';
 import { RegistrarEvento } from './application/use-cases/registrar-evento';
 import type { AppConfig } from './infrastructure/config/config';
 import { AllExceptionsFilter } from './infrastructure/http/all-exceptions.filter';
@@ -18,6 +19,12 @@ import { TypeOrmEventoRepository } from './infrastructure/persistence/typeorm/ty
 import { TypeOrmNotificacionRepository } from './infrastructure/persistence/typeorm/typeorm-notificacion.repository';
 import { TypeOrmUnitOfWork } from './infrastructure/persistence/typeorm/typeorm-unit-of-work';
 import { TypeOrmWebhookConfigRepository } from './infrastructure/persistence/typeorm/typeorm-webhook-config.repository';
+import { PinoAppLogger } from './infrastructure/logging/pino-app-logger';
+import { FetchWebhookSender } from './infrastructure/webhook/fetch-webhook-sender';
+import { NotificacionWorker } from './infrastructure/worker/notificacion.worker';
+import { PoliticaReintentos } from './domain/politica-reintentos';
+import type { AppLogger } from './application/ports/app-logger';
+import type { WebhookSender } from './application/ports/webhook-sender';
 import { systemClock, uuidGenerator } from './infrastructure/system';
 import { TOKENS } from './infrastructure/tokens';
 import type { Clock } from './application/ports/clock';
@@ -88,6 +95,52 @@ function buildProviders(config: AppConfig): Provider[] {
       useFactory: (notificaciones: NotificacionRepository) =>
         new ConsultarNotificaciones(notificaciones),
     },
+    {
+      provide: TOKENS.AppLogger,
+      inject: [PinoLogger],
+      useFactory: (logger: PinoLogger) => {
+        logger.setContext('Notificaciones');
+        return new PinoAppLogger(logger);
+      },
+    },
+    {
+      provide: TOKENS.WebhookSender,
+      useFactory: () => new FetchWebhookSender(config.webhook.timeoutMs),
+    },
+    {
+      provide: TOKENS.DespacharNotificaciones,
+      inject: [
+        TOKENS.NotificacionRepository,
+        TOKENS.EventoRepository,
+        TOKENS.WebhookConfigRepository,
+        TOKENS.WebhookSender,
+        TOKENS.Clock,
+        TOKENS.AppLogger,
+      ],
+      useFactory: (
+        notificaciones: NotificacionRepository,
+        eventos: EventoRepository,
+        webhooks: WebhookConfigRepository,
+        sender: WebhookSender,
+        clock: Clock,
+        logger: AppLogger,
+      ) =>
+        new DespacharNotificaciones(
+          notificaciones,
+          eventos,
+          webhooks,
+          sender,
+          clock,
+          new PoliticaReintentos({
+            maxIntentos: config.webhook.maxAttempts,
+            baseMs: config.webhook.backoffBaseMs,
+            maxMs: config.webhook.backoffMaxMs,
+          }),
+          logger,
+          { tamanoLote: config.worker.batchSize, arrendamientoMs: config.worker.leaseMs },
+        ),
+    },
+    NotificacionWorker,
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_PIPE, useFactory: crearValidationPipe },
   ];
