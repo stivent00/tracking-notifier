@@ -3,7 +3,6 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testconta
 const POSTGRES_IMAGE = 'postgres:16-alpine';
 
 declare global {
-  // eslint-disable-next-line no-var
   var __POSTGRES_CONTAINER__: StartedPostgreSqlContainer | undefined;
 }
 
@@ -24,7 +23,8 @@ export default async function globalSetup(): Promise<void> {
   } catch (error) {
     throw new Error(
       'Could not start PostgreSQL for the integration tests. Start Docker, or set ' +
-        `TEST_DATABASE_URL to an existing server. Cause: ${(error as Error).message}`,
+        'TEST_DATABASE_URL to an existing server.',
+      { cause: error },
     );
   }
 }
